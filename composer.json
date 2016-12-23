@@ -1,0 +1,26 @@
+{
+    "name": "maelstromeous/bolt-thumbnail-warmer",
+    "description": "Enables the ability to trigger caching of thumbnails upon inserting / saving records.",
+    "type": "bolt-extension",
+    "require": {
+        "bolt/bolt": "^3.2.4"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Matt Cavanagh",
+            "email": "maelstrome26@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "Bolt\\Extension\\Maelstromeous\\ThumbnailWarmer\\": "src"
+        }
+    },
+    "extra": {
+        "bolt-assets": "web",
+        "bolt-class": "Bolt\\Extension\\Maelstromeous\\ThumbnailWarmer\\ThumbnailWarmerExtension"
+    }
+}
