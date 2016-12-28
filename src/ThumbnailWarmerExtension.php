@@ -140,6 +140,8 @@ class ThumbnailWarmerExtension extends SimpleExtension
     {
         $app = $this->getContainer();
 
+        $successful = true;
+
         // Go through each image and generate the thumbnail
         foreach ($this->images as $key => $data) {
             if ($data['type'] === 'alias') {
@@ -149,12 +151,20 @@ class ThumbnailWarmerExtension extends SimpleExtension
                     $data['alias'],
                     $data['thumbPath']
                 );
+
+                if ($response === false) {
+                    $successful = false;
+                }
             } else {
 
             }
         }
 
-        $app['session']->getFlashBag()->set('success', 'Thumbnails successfully cached. If you didn\'t notice any changes, please clear your thumbnail cache and save the record again.');
+        if ($successful === true) {
+            $app['session']->getFlashBag()->set('success', 'Thumbnails successfully cached. If you didn\'t notice any changes, please clear your thumbnail cache and save the record again.');
+        } else {
+            $app['session']->getFlashBag()->set('error', 'There was an error in generating the thumbnails. Please check your contenttypes.yml, your theme.yml file and ensure the original file exists.');
+        }
     }
 
     /**
@@ -182,5 +192,13 @@ class ThumbnailWarmerExtension extends SimpleExtension
             $file,
             $alias
         );
+
+
+        if ($response->getStatusCode() !== 200 ||
+            $response->getThumbnail()->getImage()->getPath() === 'view/img/default_notfound.png') {
+            return false;
+        }
+
+        return true;
     }
 }
