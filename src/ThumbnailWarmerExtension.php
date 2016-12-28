@@ -2,7 +2,6 @@
 
 namespace Bolt\Extension\Maelstromeous\ThumbnailWarmer;
 
-
 use Bolt\Events\StorageEvent;
 use Bolt\Events\StorageEvents;
 use Bolt\Extension\SimpleExtension;
@@ -82,10 +81,12 @@ class ThumbnailWarmerExtension extends SimpleExtension
         if (! empty($this->images)) {
             $this->generate();
         }
+
+        die;
     }
 
     /**
-     * Reviews all aliases and builds paths if required
+     * Reviews all aliases and builds image data if required
      *
      * @param  array  $image Image descriptior
      * @param  string $file  Image path
@@ -129,6 +130,15 @@ class ThumbnailWarmerExtension extends SimpleExtension
         if (count($image) === 0) {
             return false;
         }
+
+        foreach ($image['cache']['sizes'] as $sizes) {
+            $this->images[] = [
+                'type' => 'size',
+                'sizes' => $sizes,
+                'file' => $file,
+                'thumbPath' => "/thumbs/{$alias}/{$file}"
+            ];
+        }
     }
 
     /**
@@ -151,12 +161,16 @@ class ThumbnailWarmerExtension extends SimpleExtension
                     $data['alias'],
                     $data['thumbPath']
                 );
-
-                if ($response === false) {
-                    $successful = false;
-                }
             } else {
-
+                $response = $this->generatorSizes(
+                    $app,
+                    $data['file'],
+                    $data['sizes'],
+                    $data['thumbPath']
+                );
+            }
+            if ($response === false) {
+                $successful = false;
             }
         }
 
@@ -193,6 +207,57 @@ class ThumbnailWarmerExtension extends SimpleExtension
             $alias
         );
 
+        if ($response->getStatusCode() !== 200 ||
+            $response->getThumbnail()->getImage()->getPath() === 'view/img/default_notfound.png') {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Builds the correct information for the Thumbnail Generator Sizes function
+     *
+     * @param  Application $app       Bolt Application
+     * @param  string      $file      Location of the original file
+     * @param  string      $sizes     Dimensions of the image
+     * @param  string      $thumbPath The path of the generated thumbnail
+     *
+     * @return void
+     */
+    public function generatorSizes(Application $app, $file, $sizes, $action, $thumbPath)
+    {
+        $controller = new Controller();
+        $request = new Request; // "Spoof" a request. I feel dirty.
+
+        // Set the request path which the Thumbnail Generator uses to build a filepath
+        $request->server->set('REQUEST_URI', $thumbPath);
+
+        // Figure out action based off 3rd property from the cache config
+        $actions = [
+            'c' => Action::CROP,
+            'r' => Action::RESIZE,
+            'b' => Action::BORDER,
+            'f' => Action::FIT,
+        ];
+
+        $action = Action::CROP;
+
+        if (! empty($sizes[2])) {
+            if (array_key_exists($sizes[2], $actions)) {
+                $action = $actions[$sizes[2]];
+            }
+        }
+
+        // Send the thumbnail to the generator
+        $response = $controller->thumbnail(
+            $app,
+            $request,
+            $file,
+            $action,
+            $sizes[0], // Width
+            $sizes[1] // Height
+        );
 
         if ($response->getStatusCode() !== 200 ||
             $response->getThumbnail()->getImage()->getPath() === 'view/img/default_notfound.png') {
