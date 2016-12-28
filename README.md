@@ -1,8 +1,5 @@
 # Bolt Thumbnail Cache / Warmer Extension
 
-## Requirements
-* CURL (chances are you have this installed already)
-
 ## Usage
 
 Edit your `contenttypes.yml` file on any `image` type using the below as a guide:

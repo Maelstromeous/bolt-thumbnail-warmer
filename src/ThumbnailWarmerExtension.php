@@ -10,8 +10,6 @@ use Bolt\Filesystem\Handler\Image\Dimensions;
 use Bolt\Thumbs\Action;
 use Bolt\Thumbs\Controller;
 use Bolt\Thumbs\Transaction;
-use GuzzleHttp\Exception\RequestException;
-use GuzzleHttp\Promise;
 use Silex\Application;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
