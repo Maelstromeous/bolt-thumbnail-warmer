@@ -12,6 +12,7 @@ use Bolt\Thumbs\Controller;
 use Bolt\Thumbs\Transaction;
 use Silex\Application;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * ThumbnailWarmer Extension for pre-caching / warming thumbnails
@@ -77,6 +78,7 @@ class ThumbnailWarmerExtension extends SimpleExtension
             }
         }
 
+        // If we have images to generate, then let's send them off!
         if (! empty($this->images)) {
             $this->generate();
         }
@@ -106,10 +108,9 @@ class ThumbnailWarmerExtension extends SimpleExtension
 
             // Build the URL and add it to the hit array
             $this->images[] = [
-                'image' => $app['thumbnails.aliases'][$alias],
-                'file' => $file,
-                'request' => "/thumbs/{$alias}/{$file}",
                 'type' => 'alias',
+                'file' => $file,
+                'thumbPath' => "/thumbs/{$alias}/{$file}",
                 'alias' => $alias
             ];
         }
@@ -128,11 +129,10 @@ class ThumbnailWarmerExtension extends SimpleExtension
         if (count($image) === 0) {
             return false;
         }
-        var_dump('sizes');
     }
 
     /**
-     * Hits the paths required to generate the thumbnails
+     * Starts the generation process
      *
      * @return boolean
      */
@@ -142,50 +142,45 @@ class ThumbnailWarmerExtension extends SimpleExtension
 
         // Go through each image and generate the thumbnail
         foreach ($this->images as $key => $data) {
-
             if ($data['type'] === 'alias') {
-                $response = $this->alias(
+                $response = $this->generatorAlias(
                     $app,
                     $data['file'],
                     $data['alias'],
-                    $data['request']
+                    $data['thumbPath']
                 );
+            } else {
+
             }
         }
-    }
 
-    public function alias(Application $app, $file, $alias, $thumbPath)
-    {
-        $config = isset($app['thumbnails.aliases'][$alias]) ? $app['thumbnails.aliases'][$alias] : false;
-
-        $width = isset($config['size'][0]) ? $config['size'][0] : 0;
-        $height = isset($config['size'][1]) ? $config['size'][1] : 0;
-        $action = isset($config['cropping']) ? $config['cropping'] : Action::CROP;
-
-        return $this->serve($app, $file, $thumbPath, $action, $width, $height);
+        $app['session']->getFlashBag()->set('success', 'Thumbnails successfully cached. If you didn\'t notice any changes, please clear your thumbnail cache and save the record again.');
     }
 
     /**
-     * A clone of the Thumbnail generator serve function but without the response redirect
+     * Builds the correct information for the Thumbnail Generator Alias function
      *
-     * @param  Application $app     [description]
-     * @param  [type]      $file    [description]
-     * @param  [type]      $action  [description]
-     * @param  [type]      $width   [description]
-     * @param  [type]      $height  [description]
+     * @param  Application $app       Bolt Application
+     * @param  string      $file      Location of the original file
+     * @param  string      $alias     The alias of the image
+     * @param  string      $thumbPath The path of the generated thumbnail
      *
-     * @return [type]               [description]
+     * @return void
      */
-    public function serve(Application $app, $file, $thumbPath, $action, $width, $height)
+    public function generatorAlias(Application $app, $file, $alias, $thumbPath)
     {
-        if (strpos($file, '@2x') !== false) {
-            $file = str_replace('@2x', '', $file);
-            $width *= 2;
-            $height *= 2;
-        }
+        $controller = new Controller();
+        $request = new Request; // "Spoof" a request. I feel dirty.
 
-        $transaction = new Transaction($file, $action, new Dimensions($width, $height), $thumbPath);
+        // Set the request path which the Thumbnail Generator uses to build a filepath
+        $request->server->set('REQUEST_URI', $thumbPath);
 
-        $thumbnail = $app['thumbnails']->respond($transaction);
+        // Send the thumbnail to the generator
+        $response = $controller->alias(
+            $app,
+            $request,
+            $file,
+            $alias
+        );
     }
 }
