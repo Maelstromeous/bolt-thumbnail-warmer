@@ -1,5 +1,7 @@
 # Bolt Thumbnail Cache / Warmer Extension
 
+This extension is a work in progress. DO **NOT** use in production!
+
 ## Usage
 
 Edit your `contenttypes.yml` file on any `image` type using the below as a guide:
