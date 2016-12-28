@@ -2,9 +2,14 @@
 
 namespace Bolt\Extension\Maelstromeous\ThumbnailWarmer;
 
+
 use Bolt\Events\StorageEvent;
 use Bolt\Events\StorageEvents;
 use Bolt\Extension\SimpleExtension;
+use Bolt\Filesystem\Handler\Image\Dimensions;
+use Bolt\Thumbs\Action;
+use Bolt\Thumbs\Controller;
+use Bolt\Thumbs\Transaction;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Promise;
 use Silex\Application;
@@ -18,7 +23,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 class ThumbnailWarmerExtension extends SimpleExtension
 {
     protected $basePath;
-    protected $pathsToHit = [];
+    protected $images = [];
 
     public static function getSubscribedEvents()
     {
@@ -65,9 +70,6 @@ class ThumbnailWarmerExtension extends SimpleExtension
                 // Get the filepath we'll need to run the processing on
                 $file = $data[$key]['file'];
 
-                var_dump($image);
-                var_dump($file);
-
                 if (! empty($image['cache']['aliases'])) {
                     $this->processAliases($image, $file);
                 }
@@ -77,10 +79,9 @@ class ThumbnailWarmerExtension extends SimpleExtension
             }
         }
 
-        if (! empty($this->pathsToHit)) {
-            $this->hitPaths();
+        if (! empty($this->images)) {
+            $this->generate();
         }
-        die;
     }
 
     /**
@@ -106,7 +107,13 @@ class ThumbnailWarmerExtension extends SimpleExtension
             }
 
             // Build the URL and add it to the hit array
-            $this->pathsToHit[] = $this->basePath . "/thumbs/{$alias}/{$file}";
+            $this->images[] = [
+                'image' => $app['thumbnails.aliases'][$alias],
+                'file' => $file,
+                'request' => "/thumbs/{$alias}/{$file}",
+                'type' => 'alias',
+                'alias' => $alias
+            ];
         }
     }
 
@@ -127,35 +134,60 @@ class ThumbnailWarmerExtension extends SimpleExtension
     }
 
     /**
-     * Hits the paths requires to generate the thumbnails
+     * Hits the paths required to generate the thumbnails
      *
      * @return boolean
      */
-    public function hitPaths()
+    public function generate()
     {
-        $client = $this->getContainer()['guzzle.client'];
+        $app = $this->getContainer();
 
-        $promises = [];
+        // Go through each image and generate the thumbnail
+        foreach ($this->images as $key => $data) {
 
-        // Build Async request with Guzzle
-        foreach ($this->pathsToHit as $key => $path) {
-            $promises[] = $client->getAsync($path);
+            if ($data['type'] === 'alias') {
+                $response = $this->alias(
+                    $app,
+                    $data['file'],
+                    $data['alias'],
+                    $data['request']
+                );
+            }
+        }
+    }
+
+    public function alias(Application $app, $file, $alias, $thumbPath)
+    {
+        $config = isset($app['thumbnails.aliases'][$alias]) ? $app['thumbnails.aliases'][$alias] : false;
+
+        $width = isset($config['size'][0]) ? $config['size'][0] : 0;
+        $height = isset($config['size'][1]) ? $config['size'][1] : 0;
+        $action = isset($config['cropping']) ? $config['cropping'] : Action::CROP;
+
+        return $this->serve($app, $file, $thumbPath, $action, $width, $height);
+    }
+
+    /**
+     * A clone of the Thumbnail generator serve function but without the response redirect
+     *
+     * @param  Application $app     [description]
+     * @param  [type]      $file    [description]
+     * @param  [type]      $action  [description]
+     * @param  [type]      $width   [description]
+     * @param  [type]      $height  [description]
+     *
+     * @return [type]               [description]
+     */
+    public function serve(Application $app, $file, $thumbPath, $action, $width, $height)
+    {
+        if (strpos($file, '@2x') !== false) {
+            $file = str_replace('@2x', '', $file);
+            $width *= 2;
+            $height *= 2;
         }
 
-        // Trigger the paths and generate the thumbs
-        try {
-            $results = Promise\unwrap($promises);
-            $this->getContainer()['session']->getFlashBag()->set(
-                'success',
-                'Thumbnails were successfully cached.'
-            );
-        } catch (RequestException $e) {
-            $this->getContainer()['session']->getFlashBag()->set(
-                'error',
-                "There was an error in caching your thumbnails. Error reported was: {$e->getMessage()}"
-            );
-        }
+        $transaction = new Transaction($file, $action, new Dimensions($width, $height), $thumbPath);
 
-        var_dump($results);
+        $thumbnail = $app['thumbnails']->respond($transaction);
     }
 }
